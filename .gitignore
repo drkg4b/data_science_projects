@@ -1,3 +1,4 @@
 *.csv
 *.pdf
 titanic_dataset/titanic.py
+fraud_detection/.ipynb_checkpoints/fraud_detection-checkpoint.ipynb
