@@ -1,4 +1,5 @@
 # %%
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 import itertools
 import os
@@ -125,14 +126,47 @@ plt.show()
 X = df.drop('Attrition', axis=1)
 y = df['Attrition']
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2, random_state=42, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=.2, random_state=42, stratify=y)
 
-#%%
+# %%
+# Get numerical and categorical features
 numerical = df.select_dtypes(exclude=['object'])
 categorical = df.select_dtypes(['object'])
 
-#%%
-categorical
+# %%
+ohe = OneHotEncoder()
+
+X_train_ohe = X_train
+X_test_ohe = X_test
+
+for col in categorical:
+
+    # Merge again train and test data
+    data = X_train[[col]].append(X_test[[col]])
+
+    ohe.fit(data)
+    
+    # Encode features on train data
+    temp = ohe.transform(X_train[[col]])
+
+    # Make a dataframe for concatenation
+    temp = pd.DataFrame(temp)
+
+    # Set the index of the temporary dataframe to be the same as the train dataset
+    temp = temp.set_index(X_train.index.values)
+
+    # Adding the OHE variables back to the features dataset
+    X_train_ohe = pd.concat([X_train_ohe, temp], axis=1)
+
+    # Repeat the same procedure for the test data
+    temp = ohe.transform(X_test[[col]])
+
+    temp = pd.DataFrame(temp)
+
+    temp = temp.set_index(X_test.index.values)
+
+    X_test_ohe = pd.concat([X_test_ohe, temp], axis=1)
 
 # %% [markdown]
 # We want to split before attempting any oversampling because when oversampling the same observation can be repeated multiple times and we don't want to test our
