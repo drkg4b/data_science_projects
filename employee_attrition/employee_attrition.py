@@ -1,4 +1,6 @@
 # %%
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, recall_score
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 import itertools
@@ -119,12 +121,12 @@ plt.show()
 #
 # Would be nice to study more the relationship between the features but for time constraints I will come back to it if I have some time left.
 
-#%%
+# %%
 # Get numerical and categorical features
 numerical = df.select_dtypes(exclude=['object'])
 categorical = df.select_dtypes(['object'])
 
-#%%
+# %%
 # One hot encode categorical features
 df = pd.get_dummies(df, drop_first=True)
 
@@ -136,15 +138,55 @@ y = df['Attrition']
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=.2, random_state=42, stratify=y)
 
-#%%
-from sklearn.linear_model import LogisticRegression
+# %%
 
 lr = LogisticRegression()
 
 lr.fit(X_train, y_train)
 
+# %%
+# Predict on test set
+lr_pred = lr.predict(X_test)
+
+# %% [markdown]
+# Accuracy can be misleading when dealing with imbalanced classes, we can use instead:
+# - Confusion Matrix: a table showing correct predictions and types of incorrect predictions.
+# - Precision: the number of true positives divided by all positive predictions. It is a measure of a classifier's exactness. Low precision indicates a high number of false positives.
+# - Recall or true positive rate: the number of true positives divided by the number of positive values in the test data. It is a measure of a classifier's completeness. Low recall indicates a high number of false negatives.
+# - F1 Score: the weighted average of precision and recall.
+
+# Since our main objective with the dataset is to prioritize accuraltely classifying fraud cases the recall score can be considered our main metric to use for evaluating outcomes.
+
+# %%
+# Check some metrics
+accuracy_score(y_test, lr_pred)
+
+# %%
+f1_score(y_test, lr_pred)
+
+# %%
+cm_lr = pd.DataFrame(confusion_matrix(y_test, lr_pred), index=[
+                     'Attrition', 'No Attrition'], columns=['Attrition', 'No Attrition'])
+
+_ = sns.heatmap(cm_lr, cmap='coolwarm', annot=True,
+                fmt='g', linewidths=.5, cbar=False)
+
+# %%
+recall_score(y_test, lr_pred)
+
 #%%
-lr.score(X_test, y_test)
+lr.feature_importances_
+
+#%% [markdown]
+# Next steps:
+# - Implement RandomForrest
+# - Use eithr random forrest of logistic regression to get a ranking of the variables and exclude redundant ones
+# - Scale first just numeric and after numeric plus encoded variables to see performance
+# Balance classes: oversampling, undersampling and penalyzing classes with `class_weight`
+# PCA to see if we can reduce the dataset
+# Train several models and evaluate the best performing ones.
+# Use cross validation and GridSearchCV or RandomizedSearchCV.
+
 
 # %% [markdown]
 # We want to split before attempting any oversampling because when oversampling the same observation can be repeated multiple times and we don't want to test our
