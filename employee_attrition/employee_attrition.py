@@ -117,8 +117,15 @@ plt.show()
 # - People doing overtime have a high probability to quit.
 #
 # Would be nice to study more the relationship between the features but for time constraints I will come back to it if I have some time left.
-#
-# Let us now split the data into training and testing set.
+
+#%%
+# Get numerical and categorical features
+numerical = df.select_dtypes(exclude=['object'])
+categorical = df.select_dtypes(['object'])
+
+#%%
+# One hot encode categorical features
+df = pd.get_dummies(df, drop_first=True)
 
 # %%
 # Split the dataset
@@ -128,11 +135,14 @@ y = df['Attrition']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2, random_state=42, stratify=y)
 
 #%%
-numerical = df.select_dtypes(exclude=['object'])
-categorical = df.select_dtypes(['object'])
+from sklearn.linear_model import LogisticRegression
+
+lr = LogisticRegression()
+
+lr.fit(X_train, y_train)
 
 #%%
-categorical
+lr.score(X_test, y_test)
 
 # %% [markdown]
 # We want to split before attempting any oversampling because when oversampling the same observation can be repeated multiple times and we don't want to test our
