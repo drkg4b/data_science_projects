@@ -1,3 +1,7 @@
+*.csv
+*.pdf
+titanic_dataset/titanic.py
+fraud_detection/.ipynb_checkpoints/fraud_detection-checkpoint.ipynb
 employee_attrition/.vscode/settings.json
 employee_attrition/assignment.md
 employee_attrition/.vscode/settings.json
