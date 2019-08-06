@@ -1,4 +1,8 @@
 # %%
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.utils import resample
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, recall_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
@@ -136,6 +140,17 @@ df['BusinessTravel'] = df['BusinessTravel'].map(travel_map)
 # One hot encode categorical features
 df = pd.get_dummies(df, drop_first=True)
 
+# %% [markdown]
+# We saw that the Attrition class is imbalanced. As a consequence accuracy is not a good metric anymore and we should use other metrics when comparing models such as recall, f1-score or AUC. Moreover most algorithms will learn patterns that will be biased towards the majority class.
+
+# We can deal with imbalanced classes by:
+# - Assign a bigger penalty to wrong predictions from the minority class.
+# - Upsampling the minority class or downsampling the majority one.
+# - Simulate more data.
+
+# A penalty for wrong predictios for the minority class can be assigned in some of the algorithms using the `class_weight` parameter.
+# We need to split our dataset before oversampling because in this case, the same observation can be repeated in both the training and test sets causing the model to simply learn some specific datapoints and thus overfit.
+
 # %%
 # Split the dataset
 X = df.drop('Attrition', axis=1)
@@ -143,6 +158,72 @@ y = df['Attrition']
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=.2, random_state=42, stratify=y)
+
+# %%
+# Oversampling the minority class
+X_train_up, y_train_up = resample(X_train[y_train == 1],
+                                  y_train[y_train == 1],
+                                  replace=True,
+                                  n_samples=X_train[y_train == 0].shape[0],
+                                  random_state=1)
+
+X_train_up = pd.concat([X_train[y_train == 0], X_train_up])
+y_train_up = pd.concat([y_train[y_train == 0], y_train_up])
+
+# %%
+# Downsample majority class
+X_train_dw, y_train_dw = resample(X_train[y_train == 0],
+                                  y_train[y_train == 0],
+                                  replace=True,
+                                  n_samples=X_train[y_train == 1].shape[0],
+                                  random_state=1)
+
+X_train_dw = pd.concat([X_train[y_train == 1], X_train_dw])
+y_train_dw = pd.concat([y_train[y_train == 1], y_train_dw])
+
+# %%
+# Check the shapes of the classes
+print("Original shape:", X_train.shape, y_train.shape)
+print("Upsampled shape:", X_train_up.shape, y_train_up.shape)
+print("Downsampled shape:", X_train_dw.shape, y_train_dw.shape)
+
+# %%
+# Check the principal components
+
+pca = PCA(n_components=None, svd_solver="full")
+
+scaler = StandardScaler()
+scaler = scaler.fit_transform(X_train)
+
+pca.fit(scaler)
+
+cum_var_exp = np.cumsum(pca.explained_variance_ratio_)
+
+plt.figure(figsize=(12, 6))
+
+n_features = len(cum_var_exp) + 1
+
+plt.bar(range(1, n_features), pca.explained_variance_ratio_, align="center",
+        color='magenta', label="Individual explained variance")
+
+plt.step(range(1, n_features), cum_var_exp, where="mid",
+         label="Cumulative explained variance", color='blue')
+
+plt.xticks(range(1, n_features))
+plt.legend(loc="best")
+
+plt.xlabel("Principal component index", {"fontsize": 14})
+plt.ylabel("Explained variance ratio", {"fontsize": 14})
+plt.title("PCA on training data", {"fontsize": 16})
+
+# %%
+print('We need', np.where(cum_var_exp > 0.90)[0][0], 'features to explain 90% of the variation of the data.')
+print('We need', np.where(cum_var_exp > 0.95)[0][0], 'features to explain 95% of the variation of the data.')
+print('We need', np.where(cum_var_exp > 0.99)[0][0], 'features to explain 99% of the variation of the data.')
+
+#%% [markdown]
+# Since there are some redundant features we can use some algorithm to make a rank of the feature importance and decide which one we should remove.
+
 
 # %%
 
@@ -195,4 +276,4 @@ lr.feature_importances_
 
 
 # %% [markdown]
-# We want to split before attempting any oversampling because when oversampling the same observation can be repeated multiple times and we don't want to test our
+#
