@@ -126,7 +126,13 @@ plt.show()
 numerical = df.select_dtypes(exclude=['object'])
 categorical = df.select_dtypes(['object'])
 
-# %%
+# %% [markdown]
+# Convert BusinessTravel into an ordinal categorical variable since there is intrinsic order between non, rarely and frequently.
+# One hot encode the remaining variables.
+travel_map = {'Non-Travel': 0, 'Travel_Rarely': 1, 'Travel_Frequently': 2}
+
+df['BusinessTravel'] = df['BusinessTravel'].map(travel_map)
+
 # One hot encode categorical features
 df = pd.get_dummies(df, drop_first=True)
 
@@ -174,10 +180,10 @@ _ = sns.heatmap(cm_lr, cmap='coolwarm', annot=True,
 # %%
 recall_score(y_test, lr_pred)
 
-#%%
+# %%
 lr.feature_importances_
 
-#%% [markdown]
+# %% [markdown]
 # Next steps:
 # - Implement RandomForrest
 # - Use eithr random forrest of logistic regression to get a ranking of the variables and exclude redundant ones
