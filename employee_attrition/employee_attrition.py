@@ -1,9 +1,12 @@
 # %%
+from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import RandomizedSearchCV, cross_validate
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils import resample
-from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, recall_score
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, recall_score, roc_auc_score, roc_curve
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
@@ -217,13 +220,68 @@ plt.ylabel("Explained variance ratio", {"fontsize": 14})
 plt.title("PCA on training data", {"fontsize": 16})
 
 # %%
-print('We need', np.where(cum_var_exp > 0.90)[0][0], 'features to explain 90% of the variation of the data.')
-print('We need', np.where(cum_var_exp > 0.95)[0][0], 'features to explain 95% of the variation of the data.')
-print('We need', np.where(cum_var_exp > 0.99)[0][0], 'features to explain 99% of the variation of the data.')
+print('We need', np.where(cum_var_exp > 0.90)[
+      0][0], 'features to explain 90% of the variation of the data.')
+print('We need', np.where(cum_var_exp > 0.95)[
+      0][0], 'features to explain 95% of the variation of the data.')
+print('We need', np.where(cum_var_exp > 0.99)[
+      0][0], 'features to explain 99% of the variation of the data.')
 
-#%% [markdown]
+# %% [markdown]
 # Since there are some redundant features we can use some algorithm to make a rank of the feature importance and decide which one we should remove.
 
+# %%
+
+# Preparing the parameters grid
+# Number of trees in the random forest
+n_estimators = [int(n) for n in np.linspace(200, 1000, 100)]
+
+# Number of features to consider at each split
+max_features = ['auto', 'sqrt', 'log2']
+
+# Maximum number of levels in tree
+max_depth = [int(n) for n in np.linspace(10, 100, 10)]
+max_depth.append(None)
+
+# Minimum number of samples required to split a node
+min_samples_split = [2, 5, 10]
+
+# Minimum number of leaf required at each node
+min_samples_leaf = [1, 2, 4]
+
+# Method of selecting each samples for training each tree
+bootstrap = [True, False]
+
+# Construct the grid
+param_grid = {
+    'n_estimators': n_estimators,
+    'max_features': max_features,
+    'max_depth': max_depth,
+    'min_samples_split': min_samples_split,
+    'min_samples_leaf': min_samples_leaf,
+    'bootstrap': bootstrap
+}
+
+datasets = {'imbalanced': (X_train, y_train),
+            'up_sampled': (X_train_up, y_train_up),
+            'dw_sampled': (X_train_dw, y_train_dw)}
+
+for dataset in datasets:
+
+    pipeline = make_pipeline(StandardScaler(),
+                             RandomForestClassifier(n_estimators=200,
+                                                    class_weight='balanced',
+                                                    random_state=42))
+
+    gs_rf = RandomizedSearchCV(pipeline, param_grid=param_grid, scoring='f1', cv=10, n_jobs=-1)                                                    
+
+    gs_rf.fit(datasets[dataset][0], datasets[dataset][1])
+
+    print("\033[1m" + "\033[0m" + "The best hyperparameters for {} data:".format(datasets))
+    for hyperparam in gs_rf.best_params_.keys():
+        print(hyperparam[hyperparam.find("__") + 2:], ": ", gs_rf.best_params_[hyperparam])
+        
+    print("\033[1m" + "\033[94m" + "Best 10-folds CV f1-score: {:.2f}%.".format((gs_rf.best_score_) * 100))
 
 # %%
 
