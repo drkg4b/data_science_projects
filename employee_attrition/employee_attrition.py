@@ -1,4 +1,5 @@
 # %%
+from time import time
 from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import RandomizedSearchCV, cross_validate
@@ -231,7 +232,22 @@ print('We need', np.where(cum_var_exp > 0.99)[
 # Since there are some redundant features we can use some algorithm to make a rank of the feature importance and decide which one we should remove.
 
 # %%
+# Utility function to report best scores
 
+
+def report(results, n_top=3):
+    for i in range(1, n_top + 1):
+        candidates = np.flatnonzero(results['rank_test_score'] == i)
+        for candidate in candidates:
+            print("Model with rank: {0}".format(i))
+            print("Mean validation score: {0:.3f} (std: {1:.3f})".format(
+                  results['mean_test_score'][candidate],
+                  results['std_test_score'][candidate]))
+            print("Parameters: {0}".format(results['params'][candidate]))
+            print("")
+
+
+# %%
 # Preparing the parameters grid
 # Number of trees in the random forest
 n_estimators = [int(n) for n in np.linspace(200, 1000, 100)]
@@ -254,12 +270,12 @@ bootstrap = [True, False]
 
 # Construct the grid
 param_grid = {
-    'n_estimators': n_estimators,
-    'max_features': max_features,
-    'max_depth': max_depth,
-    'min_samples_split': min_samples_split,
-    'min_samples_leaf': min_samples_leaf,
-    'bootstrap': bootstrap
+    'randomforestclassifier__n_estimators': n_estimators,
+    'randomforestclassifier__max_features': max_features,
+    'randomforestclassifier__max_depth': max_depth,
+    'randomforestclassifier__min_samples_split': min_samples_split,
+    'randomforestclassifier__min_samples_leaf': min_samples_leaf,
+    'randomforestclassifier__bootstrap': bootstrap
 }
 
 datasets = {'imbalanced': (X_train, y_train),
@@ -273,15 +289,52 @@ for dataset in datasets:
                                                     class_weight='balanced',
                                                     random_state=42))
 
-    gs_rf = RandomizedSearchCV(pipeline, param_grid=param_grid, scoring='f1', cv=10, n_jobs=-1)                                                    
+    n_iter_search = 20
+
+    gs_rf = RandomizedSearchCV(pipeline, param_distributions=param_grid,
+                               scoring='f1', cv=10, n_jobs=-1, refit=True, iid=False, n_iter=n_iter_search)
+
+    start = time()
 
     gs_rf.fit(datasets[dataset][0], datasets[dataset][1])
 
-    print("\033[1m" + "\033[0m" + "The best hyperparameters for {} data:".format(datasets))
+    print("RandomizedSearchCV took %.2f seconds for %d candidates"
+          " parameter settings." % ((time() - start), n_iter_search))
+
+    report(gs_rf.cv_results_)
+
+    print("\033[1m" + "\033[0m" +
+          "The best hyperparameters for {} data:".format(dataset))
     for hyperparam in gs_rf.best_params_.keys():
-        print(hyperparam[hyperparam.find("__") + 2:], ": ", gs_rf.best_params_[hyperparam])
-        
-    print("\033[1m" + "\033[94m" + "Best 10-folds CV f1-score: {:.2f}%.".format((gs_rf.best_score_) * 100))
+        print(hyperparam[hyperparam.find("__") + 2:],
+              ": ", gs_rf.best_params_[hyperparam])
+
+    print("\033[1m" + "\033[94m" +
+          "Best 10-folds CV f1-score: {:.2f}%.".format((gs_rf.best_score_) * 100))
+
+# %% [markdown]
+# Since the upsampled dataset yelded the best results we will use it to train the other models.
+
+# %%
+# Rename variables
+X_train, y_train = X_train_up.copy(), y_train_up.copy()
+
+# Free some memory
+del X_train_dw, y_train_dw, X_train_up, y_train_up
+
+# Refit the classifier with best parameters
+pipeline = make_pipeline(StandardScaler(),
+                         RandomForestClassifier(n_estimators=765,
+                                                min_samples_split=2,
+                                                min_samples_leaf=1,
+                                                max_features='log2',
+                                                max_depth=30,
+                                                bootstrap=False,
+                                                class_weight='balanced',
+                                                n_jobs=-1,
+                                                random_state=42))
+
+pipeline.fit(X_train, y_train)                                                
 
 # %%
 
