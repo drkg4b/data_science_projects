@@ -1,4 +1,6 @@
 # %%
+from utility_functions.plot_roc import plot_roc_and_conf_matrix
+from matplotlib.gridspec import GridSpec
 from time import time
 from sklearn.pipeline import make_pipeline
 from sklearn.ensemble import RandomForestClassifier
@@ -18,9 +20,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+curr_dir = os.getcwd()
+
+os.chdir('../')
+
 plt.style.use(['ggplot', 'seaborn'])
 
 # %%
+os.chdir(curr_dir)
+
 in_dir = 'data'
 
 in_data = os.path.join(in_dir, 'employee-attrition.csv')
@@ -296,7 +304,7 @@ for dataset in datasets:
 
     start = time()
 
-    gs_rf.fit(datasets[dataset][0], datasets[dataset][1])
+    # gs_rf.fit(datasets[dataset][0], datasets[dataset][1])
 
     print("RandomizedSearchCV took %.2f seconds for %d candidates"
           " parameter settings." % ((time() - start), n_iter_search))
@@ -334,7 +342,20 @@ pipeline = make_pipeline(StandardScaler(),
                                                 n_jobs=-1,
                                                 random_state=42))
 
-pipeline.fit(X_train, y_train)                                                
+pipeline.fit(X_train, y_train)
+
+# Since the classes are balanced now, we can use the ROC curve to estimate the model skill. Otherwise we should have also plot a precision-recall curve.
+plot_roc_and_conf_matrix(pipeline, X_test, y_test)
+
+# %%
+# Plot feature importance according to the RandomForrest calssifier
+# can also use: pipeline.named_steps['predictor'].feature_importances_
+important_features = pd.Series(
+    data=pipeline.steps[1][1].feature_importances_, index=X_train.columns)
+important_features.sort_values(ascending=False, inplace=True)
+
+_ = sns.barplot(x=important_features.values,
+                y=important_features.index, orient='h')
 
 # %%
 
