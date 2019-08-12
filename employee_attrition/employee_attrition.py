@@ -1,9 +1,8 @@
 # %%
-from utility_functions.plot_roc import plot_roc_and_conf_matrix
 from matplotlib.gridspec import GridSpec
 from time import time
 from sklearn.pipeline import make_pipeline
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.model_selection import RandomizedSearchCV, cross_validate
 import numpy as np
 from sklearn.decomposition import PCA
@@ -20,9 +19,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import importlib.util
+
 curr_dir = os.getcwd()
 
 os.chdir('../')
+
+from utility_functions.plot_roc import plot_roc_and_conf_matrix
 
 plt.style.use(['ggplot', 'seaborn'])
 
@@ -358,14 +361,95 @@ _ = sns.barplot(x=important_features.values,
                 y=important_features.index, orient='h')
 
 # %%
+# Let us try different algorithms
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.model_selection import cross_val_score
 
-lr = LogisticRegression()
+clfs = []
 
-lr.fit(X_train, y_train)
+clfs.append(LogisticRegression(random_state=42))
+clfs.append(SVC(random_state=42))
+clfs.append(DecisionTreeClassifier(random_state=42))
+clfs.append(RandomForestClassifier(random_state=42))
+clfs.append(KNeighborsClassifier())
+clfs.append(LinearDiscriminantAnalysis())
+clfs.append(ExtraTreesClassifier(random_state=42))
 
-# %%
-# Predict on test set
-lr_pred = lr.predict(X_test)
+cv_results = []
+
+for clf in clfs:
+
+      result = cross_val_score(clf, X_train, y_train, scoring='f1', cv=10, n_jobs=-1)
+
+      cv_results.append(result)
+
+#%%
+# Plot the CV results
+cv_means = []
+cv_stds = []
+
+for result in cv_results:
+
+      cv_means.append(result.mean())
+      cv_stds.append(result.std())
+
+algs = ['LogisticRegression', 'SVC', 'DecisionTree', 'RandomForrest', 'KNN', 'LinearDiscriminant', 'ExtraTrees']
+
+df_results = pd.DataFrame({'cv_mean' : cv_means, 'cv_std' : cv_stds, 'algorithm' : algs})
+
+g = sns.barplot('cv_mean', 'algorithm', data=df_results, palette='muted', orient='h', xerr=cv_stds)
+
+g.set_xlabel('F1 score')
+g.set_title('CV Scores')
+
+#%% [markdown]
+# Seems like SVC, DecisionTreeClassifier, RandomForrestClassifier and ExtraTreesClassifiers have the highest scores. Let us try to fine tune them.
+
+#%% [markdown]
+#### SVC
+
+#%%
+pip_svc = make_pipeline(StandardScaler(),
+                        SVC(class_weight='balanced',
+                            probability=True))
+
+svc_params = {'svc__kernel' : ['rbf', 'poly'],
+              'svc__gamma' : [0.001, 0.01, 0.1, 1],
+              'svc__C' : [1, 10, 50, 100, 200, 300, 1000]}                        
+
+gs_svc = RandomizedSearchCV(pip_svc, param_distributions=svc_params,
+scoring='f1', cv=10, n_jobs=-1, refit=True, iid=False, n_iter=n_iter_search)
+
+gs_svc.fit(X_train, y_train)
+
+svc_cv_scores = cross_val_score(pip_svc, X_train, y_train, scoring='f1', cv=10, n_jobs=-1)
+
+print("The best hyperparameters:")
+print("-" * 25)
+
+for hyperparam in gs_svc.best_params_.keys():
+
+    print(hyperparam[hyperparam.find("__") + 2:], ": ", gs_svc.best_params_[hyperparam])
+
+# Print CV
+print('The 10-folds CV f1-score is: {:.2f}%'.format(
+       np.mean(svc_cv_scores) * 100))
+
+#%%
+pip_svc = make_pipeline(StandardScaler(),
+                        SVC(class_weight='balanced',
+                            probability=True,
+                            kernel='rbf',
+                            gamma=1,
+                            C=10))
+
+pip_svc.fit(X_train, y_train)
+
+plot_roc_and_conf_matrix(pip_svc, X_test, y_test)
 
 # %% [markdown]
 # Accuracy can be misleading when dealing with imbalanced classes, we can use instead:
