@@ -430,7 +430,12 @@ pipeline = make_pipeline(StandardScaler(),
                                                 n_jobs=-1,
                                                 random_state=42))
 
-pipeline.fit(X_train, y_train)
+rf = pipeline.fit(X_train, y_train)
+
+rf_pred = rf.predict(X_test)
+
+print('F1 score for the RandomForrest is', f1_score(y_test, rf_pred))
+
 
 # Since the classes are balanced now, we can use the ROC curve to estimate the model skill. Otherwise we should have also plot a precision-recall curve.
 plot_roc_and_conf_matrix(pipeline, X_test, y_test)
@@ -444,6 +449,56 @@ important_features.sort_values(ascending=False, inplace=True)
 
 _ = sns.barplot(x=important_features.values,
                 y=important_features.index, orient='h')
+
+#%%
+# Drop features that are highly correlated with each other but that are less important.
+to_drop = ['JobLevel', 'TotalWorkingYears', 'YearsAtCompany', 'PerformanceRating']
+
+X_train_red = X_train.drop(columns=to_drop).copy()
+X_test_red = X_test.drop(columns=to_drop).copy()
+
+y_train_red = y_train.drop(columns=to_drop).copy()
+y_test_red = y_test.drop(columns=to_drop).copy()
+
+#%%
+# Let us train again our classifier and see the performance with the reduced dataset.
+pipeline = make_pipeline(StandardScaler(),
+                         RandomForestClassifier(n_estimators=765,
+                                                min_samples_split=2,
+                                                min_samples_leaf=1,
+                                                max_features='log2',
+                                                max_depth=30,
+                                                bootstrap=False,
+                                                class_weight='balanced',
+                                                n_jobs=-1,
+                                                random_state=42))
+
+rf = pipeline.fit(X_train_red, y_train_red)
+
+#%%
+rf_pred = rf.predict(X_test_red)
+
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import make_scorer
+
+scorer = make_scorer(f1_score)
+
+score = cross_val_score(pipeline, X_test_red, y_test_red, scoring=scorer, cv=5)
+
+print(score.mean())
+
+print('F1 score for the RandomForrest is', f1_score(y_test_red, rf_pred))
+
+plot_roc_and_conf_matrix(pipeline, X_test_red, y_test_red)
+
+#%%
+important_features = pd.Series(
+    data=pipeline.steps[1][1].feature_importances_, index=X_train_red.columns)
+important_features.sort_values(ascending=False, inplace=True)
+
+_ = sns.barplot(x=important_features.values,
+                y=important_features.index, orient='h')
+
 
 # %%
 # Let us try different algorithms
