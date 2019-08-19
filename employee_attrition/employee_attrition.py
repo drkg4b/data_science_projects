@@ -1,4 +1,18 @@
+# %% [markdown]
+# # Employee Attrition
+# The aim of this study is to provide companies with information on why employees leave. This may happen for several reasons:
+# - Low income
+# - Working environment
+# - Low level of satisfaction
+# - Retirement
+# - Health issues
+
 # %%
+from sklearn.model_selection import cross_val_score
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
 from matplotlib.gridspec import GridSpec
 from time import time
 from sklearn.pipeline import make_pipeline
@@ -23,9 +37,15 @@ import importlib.util
 
 curr_dir = os.getcwd()
 
-os.chdir('../')
+try:
 
-from utility_functions.plot_roc import plot_roc_and_conf_matrix
+    from utility_functions.plot_roc import plot_roc_and_conf_matrix
+
+except:
+
+    os.chdir('../')
+
+    from utility_functions.plot_roc import plot_roc_and_conf_matrix
 
 plt.style.use(['ggplot', 'seaborn'])
 
@@ -38,11 +58,16 @@ in_data = os.path.join(in_dir, 'employee-attrition.csv')
 
 df = pd.read_csv(in_data)
 
+# %% [markdown]
+# # Exploratory Data Analysis (EDA)
+
 # %%
 df.info()
 
 # %% [markdown]
-# there aren't any missing values and out target variable appears to be categorical.
+# - There aren't any missing values
+# - The target variable appears to be categorical.
+# - There are two datatypes: int and objects
 
 # %%
 df.describe().T
@@ -51,7 +76,9 @@ df.describe().T
 df.sample(10)
 
 # %% [markdown]
-# There are only two possible values for the target variable and it is highly imbalanced, will need to balance it before training the model. Let us transform it into numeric.
+# - Quite a few features appear to be ordinal variables (Education, EnvironmentSatisfaction, JobInvolvment, ...)
+# - There are only two possible values for the target variable and it is highly imbalanced, will need to balance it before training the model.
+# Let us transform Attrition into numeric.
 
 # %%
 data = df['Attrition'].value_counts()
@@ -63,39 +90,7 @@ df.loc[df['Attrition'] == 'Yes', 'Attrition'] = 1
 df.loc[df['Attrition'] == 'No', 'Attrition'] = 0
 
 # %% [markdown]
-# Let us check correlation between variables.
-
-# %%
-corr = df.corr()
-
-fig, ax = plt.subplots(figsize=(15, 15))
-
-sns.heatmap(corr, cmap='coolwarm', annot=True, fmt='.2f', linewidths=.5, ax=ax)
-
-# %%
-abs(corr['Attrition']) > 0.5
-
-# %% [markdown]
-# There don't seem to be high correlation between any of the variables and the target one but some features are highly correlated with each other and worth investigating more to see if they can be dropped. In particular:
-# - JobLevel almost has perfect correlation with MonthlyIncome
-# - EmployeeCount and StandardHours have the same number in it and can probably be dropped from the dataset.
-# - Age higly correlates with JobLevel, MonthlyIncome and TotalWorkingYears
-# - JobLevel highly correlates with TotalWorkingYears and YearsAtCompany
-# - MonthlyIncome highly correlates with TotalWorkingYears and YearsAtCompany
-# - PercentSalaryHike highly correlates with PerformanceRating
-
-# Let us check the categorical features
-
-# %%
-df.describe(include=['O'])
-
-# %% [markdown]
-# It appears that Over18 only have one value and can be dropped from the dataset.
-
-# %%
-to_drop = ['EmployeeCount', 'StandardHours', 'Over18', 'EmployeeNumber']
-
-df.drop(columns=to_drop, inplace=True)
+# #### General Considerations
 
 # %%
 
@@ -131,7 +126,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# - Looks like that people who trave more frequently are more likely to quit compared to those who don't travel or travel rarely.
+# - Looks like that people who travel more frequently are more likely to quit compared to those who don't travel or travel rarely.
 # - People in the sales department are more likely to quit although HR has a high standard deviation.
 # - Male quit more often than women.
 # - Sales representatives have the highest probability to quit.
@@ -139,6 +134,96 @@ plt.show()
 # - People doing overtime have a high probability to quit.
 #
 # Would be nice to study more the relationship between the features but for time constraints I will come back to it if I have some time left.
+
+# %% [markdown]
+# #### Impact of Gender
+# There are few factors that could impact attrition that are worth exploring:
+# - Is there any differences between genders? Do male earn more than females? Are females more satisfied than males?
+
+# %%
+# How old are the employeed by gender?
+print('The average age for men is:',
+      df.loc[df['Gender'] == 'Male', 'Age'].mean())
+
+print('The average age for women is:',
+      df.loc[df['Gender'] == 'Female', 'Age'].mean())
+
+g = sns.FacetGrid(df, col='Gender')
+g = g.map(sns.distplot, 'Age')
+
+# %% [markdown]
+# The average age for men is 36.65 years while for women is 37.33. Both distributions appear to be quite similar.
+
+# %%
+# Let us explore the likelihood of quitting by gender.
+g = sns.barplot(x='Gender', y='Attrition', data=df)
+
+# %% [markdown]
+# It appears that male employee are more likely to leave than females.
+
+# %%
+# I want to explore the probability of leaving based on job satisfaction by gender.
+_ = sns.violinplot(x='Attrition', y='JobSatisfaction',
+                   data=df, hue='Gender', palette='muted')
+
+# %% [markdown]
+# It appears that for those who didn't leave the job satisfaction level is the same across genders. On the other hand females who left were more dissatisfied compared to males.
+
+# %%
+# How about salary? Is there any disparity between sexes?
+g = sns.barplot(x='Gender', y='MonthlyIncome', data=df,
+                hue='Attrition', palette='muted')
+
+# %% [markdown]
+# It appears that women earn slightly more than men. Those who left the company earn the same amount across genders and significantly lower than those who stayed, this would make me think that income is an important factor in the decision process and thus worth investigating more.
+
+# %% [markdown]
+# #### Impact of Income
+# - Is income more important than job satisfaction?
+# - Is there a huge difference in income between different roles in the company? How does this affect Attrition?
+# - Is payrise a factor to consider in Attrition?
+
+# %%
+_ = sns.barplot(x='JobSatisfaction', y='MonthlyIncome',
+                data=df, hue='Attrition', palette='muted')
+
+#%% [markdown]
+# Looks like that independently from job satisfaction people who left the company earned significantly less than those who stayed.
+
+# %% [markdown]
+# Let us check correlation between variables.
+
+# %%
+corr = df.corr()
+
+fig, ax = plt.subplots(figsize=(15, 15))
+
+sns.heatmap(corr, cmap='coolwarm', annot=True, fmt='.2f', linewidths=.5, ax=ax)
+
+# %%
+abs(corr['Attrition']) > 0.5
+
+# %% [markdown]
+# There don't seem to be high correlation between any of the variables and the target one but some features are highly correlated with each other and worth investigating more to see if they can be dropped. In particular:
+# - JobLevel almost has perfect correlation with MonthlyIncome
+# - EmployeeCount and StandardHours have the same number in it and can probably be dropped from the dataset.
+# - Age higly correlates with JobLevel, MonthlyIncome and TotalWorkingYears
+# - JobLevel highly correlates with TotalWorkingYears and YearsAtCompany
+# - MonthlyIncome highly correlates with TotalWorkingYears and YearsAtCompany
+# - PercentSalaryHike highly correlates with PerformanceRating
+
+# Let us check the categorical features
+
+# %%
+df.describe(include=['O'])
+
+# %% [markdown]
+# It appears that Over18 only have one value and can be dropped from the dataset.
+
+# %%
+to_drop = ['EmployeeCount', 'StandardHours', 'Over18', 'EmployeeNumber']
+
+df.drop(columns=to_drop, inplace=True)
 
 # %%
 # Get numerical and categorical features
@@ -362,12 +447,6 @@ _ = sns.barplot(x=important_features.values,
 
 # %%
 # Let us try different algorithms
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.model_selection import cross_val_score
 
 clfs = []
 
@@ -383,69 +462,75 @@ cv_results = []
 
 for clf in clfs:
 
-      result = cross_val_score(clf, X_train, y_train, scoring='f1', cv=10, n_jobs=-1)
+    result = cross_val_score(clf, X_train, y_train,
+                             scoring='f1', cv=10, n_jobs=-1)
 
-      cv_results.append(result)
+    cv_results.append(result)
 
-#%%
+# %%
 # Plot the CV results
 cv_means = []
 cv_stds = []
 
 for result in cv_results:
 
-      cv_means.append(result.mean())
-      cv_stds.append(result.std())
+    cv_means.append(result.mean())
+    cv_stds.append(result.std())
 
-algs = ['LogisticRegression', 'SVC', 'DecisionTree', 'RandomForrest', 'KNN', 'LinearDiscriminant', 'ExtraTrees']
+algs = ['LogisticRegression', 'SVC', 'DecisionTree',
+        'RandomForrest', 'KNN', 'LinearDiscriminant', 'ExtraTrees']
 
-df_results = pd.DataFrame({'cv_mean' : cv_means, 'cv_std' : cv_stds, 'algorithm' : algs})
+df_results = pd.DataFrame(
+    {'cv_mean': cv_means, 'cv_std': cv_stds, 'algorithm': algs})
 
-g = sns.barplot('cv_mean', 'algorithm', data=df_results, palette='muted', orient='h', xerr=cv_stds)
+g = sns.barplot('cv_mean', 'algorithm', data=df_results,
+                palette='muted', orient='h', xerr=cv_stds)
 
 g.set_xlabel('F1 score')
 g.set_title('CV Scores')
 
-#%% [markdown]
+# %% [markdown]
 # Seems like SVC, DecisionTreeClassifier, RandomForrestClassifier and ExtraTreesClassifiers have the highest scores. Let us try to fine tune them.
 
-#%% [markdown]
-#### SVC
+# %% [markdown]
+# ####SVC
 
-#%%
+# %%
 pip_svc = make_pipeline(StandardScaler(),
                         SVC(class_weight='balanced',
                             probability=True))
 
-svc_params = {'svc__kernel' : ['rbf', 'poly'],
-              'svc__gamma' : [0.001, 0.01, 0.1, 1],
-              'svc__C' : [1, 10, 50, 100, 200, 300, 1000]}                        
+svc_params = {'svc__kernel': ['rbf', 'poly'],
+              'svc__gamma': [0.001, 0.01, 0.1, 1],
+              'svc__C': [1, 10, 50, 100, 200, 300, 1000]}
 
 gs_svc = RandomizedSearchCV(pip_svc, param_distributions=svc_params,
-scoring='f1', cv=10, n_jobs=-1, refit=True, iid=False, n_iter=n_iter_search)
+                            scoring='f1', cv=10, n_jobs=-1, refit=True, iid=False, n_iter=n_iter_search)
 
 gs_svc.fit(X_train, y_train)
 
-svc_cv_scores = cross_val_score(pip_svc, X_train, y_train, scoring='f1', cv=10, n_jobs=-1)
+svc_cv_scores = cross_val_score(
+    pip_svc, X_train, y_train, scoring='f1', cv=10, n_jobs=-1)
 
 print("The best hyperparameters:")
 print("-" * 25)
 
 for hyperparam in gs_svc.best_params_.keys():
 
-    print(hyperparam[hyperparam.find("__") + 2:], ": ", gs_svc.best_params_[hyperparam])
+    print(hyperparam[hyperparam.find("__") + 2:],
+          ": ", gs_svc.best_params_[hyperparam])
 
 # Print CV
 print('The 10-folds CV f1-score is: {:.2f}%'.format(
-       np.mean(svc_cv_scores) * 100))
+    np.mean(svc_cv_scores) * 100))
 
-#%%
+# %%
 pip_svc = make_pipeline(StandardScaler(),
                         SVC(class_weight='balanced',
                             probability=True,
                             kernel='rbf',
                             gamma=1,
-                            C=10))
+                            C=1))
 
 pip_svc.fit(X_train, y_train)
 
