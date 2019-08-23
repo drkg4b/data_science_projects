@@ -41,13 +41,13 @@ curr_dir = os.getcwd()
 
 try:
 
-    from utility_functions.plot_roc import plot_roc_and_conf_matrix
+    from utility_functions.plot_roc import plot_roc_and_conf_matrix, plot_roc
 
 except:
 
     os.chdir('../')
 
-    from utility_functions.plot_roc import plot_roc_and_conf_matrix
+    from utility_functions.plot_roc import plot_roc_and_conf_matrix, plot_roc
 
 plt.style.use(['ggplot', 'seaborn'])
 
@@ -743,6 +743,22 @@ for i in range(len(clfs)):
     g.set_xlabel('Relative Importance')
     g.set_ylabel('Features')
     g.set_title(clfs[i][1])
+
+#%%
+# Plot ROC curves for all classifiers
+estimators = {"RF": rf_best,
+              "SVC": svc_best,
+              "BDT": dtc_best,
+              "ETC": et_best}
+
+plot_roc(estimators, X_test, y_test, (12, 8))
+
+# Print out accuracy score on test data
+print("The accuracy rate and f1-score on test data are:")
+for estimator in estimators.keys():
+    print("{}: {:.2f}%, {:.2f}%.".format(estimator,
+        accuracy_score(y_test, estimators[estimator].predict(X_test)) * 100,
+         f1_score(y_test, estimators[estimator].predict(X_test)) * 100))
 
 # %% [markdown]
 # Accuracy can be misleading when dealing with imbalanced classes, we can use instead:
