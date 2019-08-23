@@ -8,6 +8,8 @@
 # - Health issues
 
 # %%
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.metrics import make_scorer
 from sklearn.model_selection import cross_val_score
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.neighbors import KNeighborsClassifier
@@ -187,7 +189,7 @@ g = sns.barplot(x='Gender', y='MonthlyIncome', data=df,
 _ = sns.barplot(x='JobSatisfaction', y='MonthlyIncome',
                 data=df, hue='Attrition', palette='muted')
 
-#%% [markdown]
+# %% [markdown]
 # Looks like that independently from job satisfaction people who left the company earned significantly less than those who stayed.
 
 # %% [markdown]
@@ -394,19 +396,19 @@ for dataset in datasets:
 
     # gs_rf.fit(datasets[dataset][0], datasets[dataset][1])
 
-    print("RandomizedSearchCV took %.2f seconds for %d candidates"
-          " parameter settings." % ((time() - start), n_iter_search))
+    # print("RandomizedSearchCV took %.2f seconds for %d candidates"
+    #       " parameter settings." % ((time() - start), n_iter_search))
 
-    report(gs_rf.cv_results_)
+    # report(gs_rf.cv_results_)
 
-    print("\033[1m" + "\033[0m" +
-          "The best hyperparameters for {} data:".format(dataset))
-    for hyperparam in gs_rf.best_params_.keys():
-        print(hyperparam[hyperparam.find("__") + 2:],
-              ": ", gs_rf.best_params_[hyperparam])
+    # print("\033[1m" + "\033[0m" +
+    #       "The best hyperparameters for {} data:".format(dataset))
+    # for hyperparam in gs_rf.best_params_.keys():
+    #     print(hyperparam[hyperparam.find("__") + 2:],
+    #           ": ", gs_rf.best_params_[hyperparam])
 
-    print("\033[1m" + "\033[94m" +
-          "Best 10-folds CV f1-score: {:.2f}%.".format((gs_rf.best_score_) * 100))
+    # print("\033[1m" + "\033[94m" +
+    #       "Best 10-folds CV f1-score: {:.2f}%.".format((gs_rf.best_score_) * 100))
 
 # %% [markdown]
 # Since the upsampled dataset yelded the best results we will use it to train the other models.
@@ -450,9 +452,10 @@ important_features.sort_values(ascending=False, inplace=True)
 _ = sns.barplot(x=important_features.values,
                 y=important_features.index, orient='h')
 
-#%%
+# %%
 # Drop features that are highly correlated with each other but that are less important.
-to_drop = ['JobLevel', 'TotalWorkingYears', 'YearsAtCompany', 'PerformanceRating']
+to_drop = ['JobLevel', 'TotalWorkingYears',
+           'YearsAtCompany', 'PerformanceRating']
 
 X_train_red = X_train.drop(columns=to_drop).copy()
 X_test_red = X_test.drop(columns=to_drop).copy()
@@ -460,7 +463,7 @@ X_test_red = X_test.drop(columns=to_drop).copy()
 y_train_red = y_train.drop(columns=to_drop).copy()
 y_test_red = y_test.drop(columns=to_drop).copy()
 
-#%%
+# %%
 # Let us train again our classifier and see the performance with the reduced dataset.
 pipeline = make_pipeline(StandardScaler(),
                          RandomForestClassifier(n_estimators=765,
@@ -475,11 +478,9 @@ pipeline = make_pipeline(StandardScaler(),
 
 rf = pipeline.fit(X_train_red, y_train_red)
 
-#%%
+# %%
 rf_pred = rf.predict(X_test_red)
 
-from sklearn.model_selection import cross_val_score
-from sklearn.metrics import make_scorer
 
 scorer = make_scorer(f1_score)
 
@@ -491,7 +492,7 @@ print('F1 score for the RandomForrest is', f1_score(y_test_red, rf_pred))
 
 plot_roc_and_conf_matrix(pipeline, X_test_red, y_test_red)
 
-#%%
+# %%
 important_features = pd.Series(
     data=pipeline.steps[1][1].feature_importances_, index=X_train_red.columns)
 important_features.sort_values(ascending=False, inplace=True)
@@ -548,7 +549,7 @@ g.set_title('CV Scores')
 # Seems like SVC, DecisionTreeClassifier, RandomForrestClassifier and ExtraTreesClassifiers have the highest scores. Let us try to fine tune them.
 
 # %% [markdown]
-# ####SVC
+# #### SVC
 
 # %%
 pip_svc = make_pipeline(StandardScaler(),
@@ -564,9 +565,6 @@ gs_svc = RandomizedSearchCV(pip_svc, param_distributions=svc_params,
 
 gs_svc.fit(X_train, y_train)
 
-svc_cv_scores = cross_val_score(
-    pip_svc, X_train, y_train, scoring='f1', cv=10, n_jobs=-1)
-
 print("The best hyperparameters:")
 print("-" * 25)
 
@@ -576,20 +574,175 @@ for hyperparam in gs_svc.best_params_.keys():
           ": ", gs_svc.best_params_[hyperparam])
 
 # Print CV
-print('The 10-folds CV f1-score is: {:.2f}%'.format(
-    np.mean(svc_cv_scores) * 100))
+print('The best 10-folds CV f1-score is: {:.2f}%'.format(
+    np.mean(gs_svc.best_score_) * 100))
 
 # %%
-pip_svc = make_pipeline(StandardScaler(),
-                        SVC(class_weight='balanced',
-                            probability=True,
-                            kernel='rbf',
-                            gamma=1,
-                            C=1))
+plot_roc_and_conf_matrix(gs_svc, X_test, y_test)
 
-pip_svc.fit(X_train, y_train)
+# %% [markdown]
+# #### DecisionTreeClassifier
 
-plot_roc_and_conf_matrix(pip_svc, X_test, y_test)
+# %%
+dtc = DecisionTreeClassifier(class_weight='balanced')
+
+pip_ada = make_pipeline(StandardScaler(),
+                        AdaBoostClassifier(dtc, random_state=42))
+
+ada_params = {"adaboostclassifier__base_estimator__criterion": ["gini", "entropy"],
+              "adaboostclassifier__base_estimator__splitter":   ["best", "random"],
+              "adaboostclassifier__algorithm": ["SAMME", "SAMME.R"],
+              "adaboostclassifier__n_estimators": [1, 10, 50, 100],
+              "adaboostclassifier__learning_rate":  [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 1.5]
+              }
+
+gs_ada_dtc = RandomizedSearchCV(pip_ada, param_distributions=ada_params,
+                                cv=10, scoring='f1', refit=True, iid=False, n_jobs=-1, verbose=1, n_iter=n_iter_search)
+
+gs_ada_dtc.fit(X_train, y_train)
+
+print("The best hyperparameters:")
+print("-" * 25)
+
+for hyperparam in gs_ada_dtc.best_params_.keys():
+
+    print(hyperparam[hyperparam.find("__") + 2:],
+          ": ", gs_ada_dtc.best_params_[hyperparam])
+
+# Print CV
+print('The 10-folds CV f1-score is: {:.2f}%'.format(
+    np.mean(gs_ada_dtc.best_score_) * 100))
+
+# %%
+plot_roc_and_conf_matrix(gs_ada_dtc, X_test, y_test)
+
+# %% [markdown]
+# #### RandomForrestClassifier
+
+# %%
+pip_rf = make_pipeline(StandardScaler(),
+                       RandomForestClassifier(class_weight='balanced',
+                                              random_state=42))
+
+n_estimators = [int(n) for n in np.linspace(200, 1000, 100)]
+max_features = ['auto', 'sqrt', 'log2']
+max_depth = [int(n) for n in np.linspace(10, 100, 10)]
+max_depth.append(None)
+min_samples_split = [2, 5, 10]
+min_samples_leaf = [1, 2, 4]
+bootstrap = [True, False]
+
+rf_params = {'randomforestclassifier__n_estimators': n_estimators,
+             'randomforestclassifier__max_features': max_features,
+             'randomforestclassifier__max_depth': max_depth,
+             'randomforestclassifier__min_samples_split': min_samples_split,
+             'randomforestclassifier__min_samples_leaf': min_samples_leaf,
+             'randomforestclassifier__bootstrap': bootstrap
+             }
+
+gs_rf = RandomizedSearchCV(pip_rf,
+                           param_distributions=rf_params,
+                           scoring='f1',
+                           cv=10,
+                           n_jobs=-1,
+                           refit=True,
+                           iid=False,
+                           n_iter=n_iter_search)
+
+gs_rf.fit(X_train, y_train)
+
+print("The best hyperparameters:")
+print("-" * 25)
+
+for hyperparam in gs_rf.best_params_.keys():
+
+    print(hyperparam[hyperparam.find("__") + 2:],
+          ": ", gs_rf.best_params_[hyperparam])
+
+# Print CV
+print('The 10-folds CV f1-score is: {:.2f}%'.format(
+    np.mean(gs_rf.best_score_) * 100))
+
+# %%
+plot_roc_and_conf_matrix(gs_rf, X_test, y_test)
+
+# %% [markdown]
+# #### ExtraTreesClassifier
+
+# %%
+pip_et = make_pipeline(StandardScaler(),
+                       ExtraTreesClassifier(class_weight='balanced',
+                                            random_state=42))
+
+et_params = {"extratreesclassifier__max_depth": [None],
+             "extratreesclassifier__max_features": [1, 3, 10],
+             "extratreesclassifier__min_samples_split": [2, 3, 10],
+             "extratreesclassifier__min_samples_leaf": [1, 3, 10],
+             "extratreesclassifier__bootstrap": [False],
+             "extratreesclassifier__n_estimators": [100, 300],
+             "extratreesclassifier__criterion": ["gini"]}
+
+gs_et = RandomizedSearchCV(pip_et,
+                           param_distributions=et_params,
+                           scoring='f1',
+                           cv=10,
+                           n_jobs=-1,
+                           refit=True,
+                           iid=False,
+                           n_iter=n_iter_search)
+
+gs_et.fit(X_train, y_train)
+
+print("The best hyperparameters:")
+print("-" * 25)
+
+for hyperparam in gs_et.best_params_.keys():
+
+    print(hyperparam[hyperparam.find("__") + 2:],
+          ": ", gs_et.best_params_[hyperparam])
+
+# Print CV
+print('The 10-folds CV f1-score is: {:.2f}%'.format(
+    np.mean(gs_et.best_score_) * 100))
+
+# %%
+plot_roc_and_conf_matrix(gs_et, X_test, y_test)
+
+# %% [markdown]
+# Let us now visualize the most important features for the best classifiers chosen.
+
+# %%
+# important_features = pd.Series(
+#     data=pipeline.steps[1][1].feature_importances_, index=X_train_red.columns)
+# important_features.sort_values(ascending=False, inplace=True)
+
+# _ = sns.barplot(x=important_features.values,
+#                 y=important_features.index, orient='h')
+
+dtc_best = gs_ada_dtc.best_estimator_
+rf_best = gs_rf.best_estimator_
+et_best = gs_et.best_estimator_
+
+clfs = [(dtc_best, 'BDT'), (rf_best, 'RandomForrest'), (et_best, 'ExtraTree')]
+
+fig, ax = plt.subplots(2, 2, figsize=(15, 15), sharex=True)
+
+ax = ax.ravel()
+
+for i in range(len(clfs)):
+
+    important_features = pd.Series(
+        data=clfs[i][0].steps[1][1].feature_importances_, index=X_train.columns)
+
+    important_features.sort_values(ascending=False, inplace=True)
+
+    g = sns.barplot(x=important_features.values, 
+                    y=important_features.index, orient='h',
+                    ax=ax[i])
+
+    g.set_xlabel('Relative Importance')
+    g.set_ylabel('Features')
+    g.set_title(clfs[i][1])
 
 # %% [markdown]
 # Accuracy can be misleading when dealing with imbalanced classes, we can use instead:
@@ -599,26 +752,6 @@ plot_roc_and_conf_matrix(pip_svc, X_test, y_test)
 # - F1 Score: the weighted average of precision and recall.
 
 # Since our main objective with the dataset is to prioritize accuraltely classifying fraud cases the recall score can be considered our main metric to use for evaluating outcomes.
-
-# %%
-# Check some metrics
-accuracy_score(y_test, lr_pred)
-
-# %%
-f1_score(y_test, lr_pred)
-
-# %%
-cm_lr = pd.DataFrame(confusion_matrix(y_test, lr_pred), index=[
-                     'Attrition', 'No Attrition'], columns=['Attrition', 'No Attrition'])
-
-_ = sns.heatmap(cm_lr, cmap='coolwarm', annot=True,
-                fmt='g', linewidths=.5, cbar=False)
-
-# %%
-recall_score(y_test, lr_pred)
-
-# %%
-lr.feature_importances_
 
 # %% [markdown]
 # Next steps:
