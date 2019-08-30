@@ -234,6 +234,8 @@ categorical = df.select_dtypes(['object'])
 
 # %% [markdown]
 # Convert BusinessTravel into an ordinal categorical variable since there is intrinsic order between non, rarely and frequently.
+
+# %%
 # One hot encode the remaining variables.
 travel_map = {'Non-Travel': 0, 'Travel_Rarely': 1, 'Travel_Frequently': 2}
 
@@ -394,21 +396,20 @@ for dataset in datasets:
 
     start = time()
 
-    # gs_rf.fit(datasets[dataset][0], datasets[dataset][1])
+    gs_rf.fit(datasets[dataset][0], datasets[dataset][1])
 
-    # print("RandomizedSearchCV took %.2f seconds for %d candidates"
-    #       " parameter settings." % ((time() - start), n_iter_search))
+    print("RandomizedSearchCV took %.2f seconds for %d candidates"
+          " parameter settings." % ((time() - start), n_iter_search))
 
-    # report(gs_rf.cv_results_)
+    report(gs_rf.cv_results_)
 
-    # print("\033[1m" + "\033[0m" +
-    #       "The best hyperparameters for {} data:".format(dataset))
-    # for hyperparam in gs_rf.best_params_.keys():
-    #     print(hyperparam[hyperparam.find("__") + 2:],
-    #           ": ", gs_rf.best_params_[hyperparam])
+    print("The best hyperparameters for {} data:".format(dataset))
+    for hyperparam in gs_rf.best_params_.keys():
+        print(hyperparam[hyperparam.find("__") + 2:],
+              ": ", gs_rf.best_params_[hyperparam])
 
-    # print("\033[1m" + "\033[94m" +
-    #       "Best 10-folds CV f1-score: {:.2f}%.".format((gs_rf.best_score_) * 100))
+    print(
+        "Best 10-folds CV f1-score: {:.2f}%.".format((gs_rf.best_score_) * 100))
 
 # %% [markdown]
 # Since the upsampled dataset yelded the best results we will use it to train the other models.
@@ -719,6 +720,7 @@ plot_roc_and_conf_matrix(gs_et, X_test, y_test)
 # _ = sns.barplot(x=important_features.values,
 #                 y=important_features.index, orient='h')
 
+svc_best = gs_svc.best_estimator_
 dtc_best = gs_ada_dtc.best_estimator_
 rf_best = gs_rf.best_estimator_
 et_best = gs_et.best_estimator_
@@ -736,7 +738,7 @@ for i in range(len(clfs)):
 
     important_features.sort_values(ascending=False, inplace=True)
 
-    g = sns.barplot(x=important_features.values, 
+    g = sns.barplot(x=important_features.values,
                     y=important_features.index, orient='h',
                     ax=ax[i])
 
@@ -744,7 +746,7 @@ for i in range(len(clfs)):
     g.set_ylabel('Features')
     g.set_title(clfs[i][1])
 
-#%%
+# %%
 # Plot ROC curves for all classifiers
 estimators = {"RF": rf_best,
               "SVC": svc_best,
@@ -757,8 +759,9 @@ plot_roc(estimators, X_test, y_test, (12, 8))
 print("The accuracy rate and f1-score on test data are:")
 for estimator in estimators.keys():
     print("{}: {:.2f}%, {:.2f}%.".format(estimator,
-        accuracy_score(y_test, estimators[estimator].predict(X_test)) * 100,
-         f1_score(y_test, estimators[estimator].predict(X_test)) * 100))
+                                         accuracy_score(
+                                             y_test, estimators[estimator].predict(X_test)) * 100,
+                                         f1_score(y_test, estimators[estimator].predict(X_test)) * 100))
 
 # %% [markdown]
 # Accuracy can be misleading when dealing with imbalanced classes, we can use instead:
@@ -781,4 +784,7 @@ for estimator in estimators.keys():
 
 
 # %% [markdown]
-#
+!jupyter nbconvert - -to html employee_attrition.ipynb
+
+
+# %%
