@@ -1,5 +1,6 @@
 # %% [markdown]
 # #Basic Survival Analysis
+# The aim of this analysis is to identify whether there exist subgroups of veterans with lung cancer that differ in survival times and try to predict their survival times. 
 
 # %%
 # imports
@@ -71,8 +72,32 @@ df = df.assign(Age_in_decades=pd.cut(df.Age_in_years,
                                      labels=['30', '40', '50', '60', '70', '80']))
 
 # %%
-_ = sns.barplot(x='Age_in_decades', y='Survival_in_days',
+g = sns.barplot(x='Age_in_decades', y='Survival_in_days',
                 data=df, palette='muted', hue='Status')
 
+h, l = g.get_legend_handles_labels()
+
+g = g.legend(h, ['No', 'Yes'], title='Experienced Death Event')
+
 # %% [markdown]
-# It appears that
+# - It appears that older veterans are more likely to experience the death event while younger ones to be censored. 
+# - Veterans between 40 and 60 years of age tend to live longer and also stay longer into the study.
+
+#%%
+g = sns.distplot(df.loc[df['Treatment'] == 'standard', 'Age_in_years'], color='blue')
+g = sns.distplot(df.loc[df['Treatment'] == 'test', 'Age_in_years'], color='red')
+
+g.set_ylabel('Frequency')
+
+g = g.legend(['Standard', 'Test'], title='Treatment')
+
+#%%
+# Let us consider only the veterans who experienced the death event.
+_ = sns.barplot(x='Age_in_decades', y='Survival_in_days',
+                data=df[df['Status']], palette='muted', hue='Treatment')
+
+#%% [markdown]
+# - Seems like there is no difference in age distributions for the different treatments.
+# - Veterans in their 50s and 70s seems to benefit the most from the test drug while for those in their 30s the standard one seems to be more effective. In the other cases there doesn't appear to be a significant advantage of one treatment above the other.
+
+#%%
