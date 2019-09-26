@@ -4,6 +4,9 @@
 
 # %%
 # imports
+from lifelines import CoxPHFitter
+from lifelines.statistics import pairwise_logrank_test
+from lifelines.statistics import multivariate_logrank_test
 from lifelines.statistics import logrank_test
 from lifelines import KaplanMeierFitter
 import seaborn as sns
@@ -158,7 +161,53 @@ _ = plt.xlabel("time $t$")
 results = logrank_test(T[therapy], T[~therapy],
                        E[therapy], E[~therapy], alpha=.95)
 
-results.print_summary()                    
+results.print_summary()
 
 # %% [markdown]
-# The p-value is not significant thus we cannot reject the null hypothesis.
+# The p-value is not significant thus we cannot reject the null hypothesis. We can thus conclude that there is no difference between the test drug and the standard one.
+#
+# ####Stratification by cell type
+
+# %%
+cell_types = df['Celltype'].unique()
+
+ax = plt.subplot(111)
+
+for i, cell_type in enumerate(cell_types):
+
+    ix = df['Celltype'] == cell_type
+
+    kmf.fit(T[ix], E[ix], label=cell_type)
+
+    kmf.plot(ax=ax, ci_show=False)
+
+# %% [markdown]
+# Looks like veterans with smallcell and adeno cells have shorter life expectancy. We can perform a multivariate logrank test or a pairwise test to check if the different survival curves are the same or not.
+
+# %%
+# Let us perform a multivariate test. Here the null hypothesis is that all the
+# populations have the same generating death event.
+results = multivariate_logrank_test(
+    df['Survival_in_days'], df['Celltype'], df['Status'])
+
+results.print_summary()
+
+# %% [markdown]
+# The results of the mutlivariate logrank test show that the p-value is significant thus, as indicated from the plot, we can reject the null hypothesis. Let us now perform a pairwise logrank test.
+
+# %%
+results = pairwise_logrank_test(
+    df['Survival_in_days'], df['Celltype'], df['Status'])
+
+results.print_summary()
+
+# %% [markdown]
+# The pairwise logrank test confirms that for large and squamous cells and for adeno and smallcell the null hypothesis can be rejected.
+
+# %% [markdown]
+# ####Survival analysis with Cox Proportional Hazard estimator
+#
+# If we wish to explore the effect of other fetures on the survival of the veterans the Kaplan-Meier approach is not the best one as it splits the dataset in subgroups to calculate survival curves thus lowering the available statistics. A popular approach is to use instead the Cox PH estimator.
+
+# %%
+
