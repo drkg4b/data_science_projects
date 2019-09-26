@@ -1,11 +1,12 @@
 # %% [markdown]
 # #Basic Survival Analysis
-# The aim of this analysis is to identify whether there exist subgroups of veterans with lung cancer that differ in survival times and try to predict their survival times. 
+# The aim of this analysis is to identify whether there exist subgroups of veterans with lung cancer that differ in survival times and try to predict their survival times.
 
 # %%
 # imports
+from lifelines.statistics import logrank_test
+from lifelines import KaplanMeierFitter
 import seaborn as sns
-from sksurv.datasets import load_veterans_lung_cancer
 import matplotlib.pyplot as plt
 import sksurv
 import pandas as pd
@@ -15,15 +16,7 @@ plt.style.use(['ggplot', 'seaborn'])
 
 # %%
 # Import dataset
-
-# %%
-data_x, data_y = load_veterans_lung_cancer()
-
-# %%
-# Get a dataframe out of the data
-df = pd.DataFrame(data_y)
-
-df = pd.concat([data_x, df], axis=1)
+df = pd.read_csv('data/lung_cancer.csv')
 
 # %% [markdown]
 # EDA
@@ -46,7 +39,7 @@ df.describe()
 # On average people in the study survived for about 4 months.
 
 # %%
-df.describe(include=['category'])
+df.describe(include=['O'])
 
 # %% [markdown]
 # - Celltype has 4 possible values of which the 'smallcell' is the most frequent.
@@ -80,24 +73,92 @@ h, l = g.get_legend_handles_labels()
 g = g.legend(h, ['No', 'Yes'], title='Experienced Death Event')
 
 # %% [markdown]
-# - It appears that older veterans are more likely to experience the death event while younger ones to be censored. 
+# - It appears that older veterans are more likely to experience the death event while younger ones to be censored.
 # - Veterans between 40 and 60 years of age tend to live longer and also stay longer into the study.
 
-#%%
-g = sns.distplot(df.loc[df['Treatment'] == 'standard', 'Age_in_years'], color='blue')
-g = sns.distplot(df.loc[df['Treatment'] == 'test', 'Age_in_years'], color='red')
+# %%
+g = sns.distplot(df.loc[df['Treatment'] == 'standard',
+                        'Age_in_years'], color='blue')
+g = sns.distplot(df.loc[df['Treatment'] == 'test',
+                        'Age_in_years'], color='red')
 
 g.set_ylabel('Frequency')
 
 g = g.legend(['Standard', 'Test'], title='Treatment')
 
-#%%
+# %%
 # Let us consider only the veterans who experienced the death event.
 _ = sns.barplot(x='Age_in_decades', y='Survival_in_days',
                 data=df[df['Status']], palette='muted', hue='Treatment')
 
-#%% [markdown]
+# %% [markdown]
 # - Seems like there is no difference in age distributions for the different treatments.
 # - Veterans in their 50s and 70s seems to benefit the most from the test drug while for those in their 30s the standard one seems to be more effective. In the other cases there doesn't appear to be a significant advantage of one treatment above the other.
 
-#%%
+# %% [markdown]
+# Does the celltype affects the survival time? Or what if they had previous therapy?
+
+# *note to self*: Get back here with some more visualizations.
+
+# %% [markdown]
+# ####Survival analysis with Kaplan-Meier estimator
+
+# %%
+kmf = KaplanMeierFitter()
+
+T = df['Survival_in_days']
+E = df['Status']
+
+kmf.fit(T, event_observed=E)
+
+# %%
+# Plot the K-M survival function
+kmf.plot()
+
+_ = plt.ylabel("est. probability of survival $\hat{S}(t)$")
+_ = plt.xlabel("time $t$")
+
+# %%
+print(kmf.median_)
+
+# %% [markdown]
+# Looks like only 20% of the veterans survives after 200 days while 50% of them die after 80 days.
+#
+#  ####Stratification by treatment
+# Let us now see how the survival curves vary according to treatment.
+
+# %%
+therapy = df['Treatment'] == 'standard'
+
+ax = plt.subplot(111)
+
+kmf.fit(T[therapy], event_observed=E[therapy], label='Standard Treatment')
+
+_ = kmf.plot(ax=ax)
+
+print('Median survival time for standard treatment:', kmf.median_)
+
+kmf.fit(T[~therapy], event_observed=E[~therapy], label='Test Treatment')
+
+_ = kmf.plot(ax=ax, color='red')
+
+print('Median survival time for test treatment:', kmf.median_)
+
+_ = plt.ylim(0, 1)
+
+_ = plt.ylabel("est. probability of survival $\hat{S}(t)$")
+_ = plt.xlabel("time $t$")
+
+# %% [markdown]
+# Even given the huge gap between median survival times, at first sight the two treatments don't look to be different but we need to perform a log rank test to be sure.
+
+# %%
+# Let us perform a logrank test:
+# H_0 : There is no difference in treatment
+results = logrank_test(T[therapy], T[~therapy],
+                       E[therapy], E[~therapy], alpha=.95)
+
+results.print_summary()                    
+
+# %% [markdown]
+# The p-value is not significant thus we cannot reject the null hypothesis.
